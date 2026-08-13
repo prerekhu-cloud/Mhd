@@ -3,13 +3,26 @@
 
     var GH_RAW = 'https://raw.githubusercontent.com/prerekhu-cloud/Mhd/main';
     var GH_ERA = GH_RAW + '/offline/data';
+    var GH_3D  = GH_RAW + '/offline/3d';
     var PROD   = 'https://opava-transit-map.replit.app';
 
-    // Flat 3D data files — mhd-opava fetches /buildings.json etc. without /cities/ prefix
+    // Flat 3D data (mhd-opava single-city) — /buildings.json etc. without /cities/ prefix
     var FLAT_3D = {
     '/buildings.json': GH_RAW + '/buildings.json',
     '/landuse.json':   GH_RAW + '/landuse.json',
     '/trees.json':     GH_RAW + '/trees.json',
+    };
+
+    // Per-city 3D assets via /cities/{slug}/{asset}.json (mhd-app multi-city layout)
+    var GH_3D_ASSETS = {
+    opava: {
+      'buildings.json':     GH_RAW + '/buildings.json',
+      'buildings-ext.json': null,
+      'landuse.json':       GH_RAW + '/landuse.json',
+      'trees.json':         GH_RAW + '/trees.json',
+      'terrain.json':       GH_3D  + '/opava/terrain.json',
+      'tiles.json':         GH_3D  + '/opava/tiles.json'
+    }
     };
 
     // ── Era cache ─────────────────────────────────────────────────────────────
@@ -86,30 +99,30 @@
     window.fetch = async function(input, init){
     var r=pu(input), path=r.path, params=r.params;
 
-    // Flat 3D data (mhd-opava single-city): /buildings.json etc. → GitHub raw
+    // 1. Flat 3D data (mhd-opava): /buildings.json /landuse.json /trees.json → GitHub
     if(FLAT_3D[path]) return _origFetch(FLAT_3D[path]);
 
-    // Vehicle models + textures: /models/... → production server (154 MB, not on GitHub)
+    // 2. Vehicle models + textures: /models/... → production server (154 MB, CORS enabled)
     if(/^\/models\//.test(path)) return _origFetch(PROD + path);
 
-    // Multi-city /cities/{slug}/{asset}.json → GitHub raw (for mhd-app)
+    // 3. Multi-city /cities/{slug}/{asset}.json → GitHub (mhd-app layout)
     var m3d = path.match(/\/cities\/([^/]+)\/([^/?#]+\.json)$/);
     if(m3d){
-      var asset=m3d[2];
-      var ghUrls={'buildings.json':GH_RAW+'/buildings.json','landuse.json':GH_RAW+'/landuse.json','trees.json':GH_RAW+'/trees.json','buildings-ext.json':null};
-      if(asset in ghUrls){
-        var ghUrl=ghUrls[asset];
+      var cs=m3d[1], asset=m3d[2];
+      var cityMap=GH_3D_ASSETS[cs];
+      if(cityMap && asset in cityMap){
+        var ghUrl=cityMap[asset];
         if(ghUrl) return _origFetch(ghUrl);
-        return _origFetch(input, init);
+        return _origFetch(input, init); // null = optional/pass through
       }
       return _origFetch(input, init);
     }
 
-    // /api/city-data/:slug → full era (with route paths) from GitHub
+    // 4. /api/city-data/:slug → full era with route paths from GitHub
     var cm=path.match(/\/api\/city-data\/([^/?#]+)/);
     if(cm) return jr(await _fetchFullEra(cm[1]));
 
-    // /api/gtfs/* → simulated from stripped inline era
+    // 5. /api/gtfs/* → simulated from stripped inline era
     if(!path.includes('/api/gtfs/')) return _origFetch(input, init);
 
     var slug=params.get('city')||'opava';
@@ -147,5 +160,5 @@
     return jr({},404);
     };
 
-    console.info('[MHD] Offline mode — flat 3D + /models/ + API intercepted, era from GitHub');
+    console.info('[MHD] Offline interceptor v3: flat 3D + /models/ + GH_3D_ASSETS (incl. tiles.json)');
     })();
