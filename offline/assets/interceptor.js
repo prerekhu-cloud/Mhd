@@ -1,17 +1,18 @@
 (function(){
     'use strict';
 
-    var GH_RAW  = 'https://raw.githubusercontent.com/prerekhu-cloud/Mhd/main';
-    var GH_ERA  = GH_RAW + '/offline/data';
-    var PROD    = 'https://opava-transit-map.replit.app';
+    var GH_RAW = 'https://raw.githubusercontent.com/prerekhu-cloud/Mhd/main';
+    var GH_ERA = GH_RAW + '/offline/data';
+    var PROD   = 'https://opava-transit-map.replit.app';
 
-    // Flat 3D data files: mhd-opava fetches these as /buildings.json etc. (no /cities/ prefix)
+    // Flat 3D data files — mhd-opava fetches /buildings.json etc. without /cities/ prefix
     var FLAT_3D = {
     '/buildings.json': GH_RAW + '/buildings.json',
     '/landuse.json':   GH_RAW + '/landuse.json',
     '/trees.json':     GH_RAW + '/trees.json',
     };
 
+    // ── Era cache ─────────────────────────────────────────────────────────────
     var _eraCache = {};
     var _origFetch = window.fetch.bind(window);
 
@@ -34,6 +35,7 @@
     return _getInlineEra(slug);
     }
 
+    // ── GTFS helpers ──────────────────────────────────────────────────────────
     function hav(a,b,c,d){var R=6371e3,r=Math.PI/180,p=Math.sin((c-a)*r/2),q=Math.sin((d-b)*r/2);var x=p*p+Math.cos(a*r)*Math.cos(c*r)*q*q;return R*2*Math.atan2(Math.sqrt(x),Math.sqrt(1-x));}
     function sn(s){if(!s)return'';if(typeof s==='string')return s;return s.displayName||s.name||'';}
     function nm(n){return n.replace(/\s*\([^)]+\)/g,'').trim();}
@@ -80,29 +82,34 @@
     return{path:qi>=0?s.slice(0,qi):s,params:new URLSearchParams(qi>=0?s.slice(qi+1):'')};
     }
 
+    // ── Main fetch interceptor ────────────────────────────────────────────────
     window.fetch = async function(input, init){
     var r=pu(input), path=r.path, params=r.params;
 
-    // Flat 3D data (mhd-opava): /buildings.json /landuse.json /trees.json -> GitHub raw
+    // Flat 3D data (mhd-opava single-city): /buildings.json etc. → GitHub raw
     if(FLAT_3D[path]) return _origFetch(FLAT_3D[path]);
 
-    // Vehicle models + textures: /models/... -> production server (too large for GitHub)
+    // Vehicle models + textures: /models/... → production server (154 MB, not on GitHub)
     if(/^\/models\//.test(path)) return _origFetch(PROD + path);
 
-    // Multi-city /cities/{slug}/{asset}.json -> GitHub raw (for mhd-app)
+    // Multi-city /cities/{slug}/{asset}.json → GitHub raw (for mhd-app)
     var m3d = path.match(/\/cities\/([^/]+)\/([^/?#]+\.json)$/);
     if(m3d){
       var asset=m3d[2];
       var ghUrls={'buildings.json':GH_RAW+'/buildings.json','landuse.json':GH_RAW+'/landuse.json','trees.json':GH_RAW+'/trees.json','buildings-ext.json':null};
-      if(asset in ghUrls){ var u=ghUrls[asset]; return u ? _origFetch(u) : _origFetch(input,init); }
+      if(asset in ghUrls){
+        var ghUrl=ghUrls[asset];
+        if(ghUrl) return _origFetch(ghUrl);
+        return _origFetch(input, init);
+      }
       return _origFetch(input, init);
     }
 
-    // /api/city-data/:slug -> full era with route paths from GitHub
+    // /api/city-data/:slug → full era (with route paths) from GitHub
     var cm=path.match(/\/api\/city-data\/([^/?#]+)/);
     if(cm) return jr(await _fetchFullEra(cm[1]));
 
-    // /api/gtfs/* -> simulated from inline era
+    // /api/gtfs/* → simulated from stripped inline era
     if(!path.includes('/api/gtfs/')) return _origFetch(input, init);
 
     var slug=params.get('city')||'opava';
@@ -110,16 +117,26 @@
 
     if(path.includes('/gtfs/stops')){
       var q=(params.get('q')||'').toLowerCase(),bm=bsm(slug,era);
-      return jr({stops:(q?bm.stops.filter(function(s){return s.stop_name.toLowerCase().includes(q);}):bm.stops).slice(0,10)});
+      var hits=q?bm.stops.filter(function(s){return s.stop_name.toLowerCase().includes(q);}):bm.stops;
+      return jr({stops:hits.slice(0,10)});
     }
     if(path.includes('/gtfs/nearby')){
       var lat=parseFloat(params.get('lat')||'0'),lon=parseFloat(params.get('lon')||'0');
-      var rad=parseFloat(params.get('radius')||'1.5')*1e3,lim=parseInt(params.get('limit')||'8'),bm2=bsm(slug,era);
-      return jr({stops:bm2.stops.map(function(s){return Object.assign({},s,{dist_m:Math.round(hav(lat,lon,s.stop_lat,s.stop_lon));}).filter(function(s){return s.dist_m<=rad;}).sort(function(a,b){return a.dist_m-b.dist_m;}).slice(0,lim)});
+      var rad=parseFloat(params.get('radius')||'1.5')*1e3,lim=parseInt(params.get('limit')||'8');
+      var bm2=bsm(slug,era);
+      var near=bm2.stops
+        .map(function(s){return Object.assign({},s,{dist_m:Math.round(hav(lat,lon,s.stop_lat,s.stop_lon))});})
+        .filter(function(s){return s.dist_m<=rad;})
+        .sort(function(a,b){return a.dist_m-b.dist_m;})
+        .slice(0,lim);
+      return jr({stops:near});
     }
     if(path.includes('/gtfs/stop-routes')){
       var ids=(params.get('stop_ids')||'').split(',').filter(Boolean),bm3=bsm(slug,era),routes={};
-      ids.forEach(function(id){var st=bm3.id2s[id];if(!st)return;routes[id]=lfs(era,st.stop_name).map(function(l){return{short_name:String(l.num||'?'),color:l.color||'#666666',route_type:l.mode==='tram'?0:l.mode==='trolleybus'?11:3};});});
+      ids.forEach(function(id){
+        var st=bm3.id2s[id];if(!st)return;
+        routes[id]=lfs(era,st.stop_name).map(function(l){return{short_name:String(l.num||'?'),color:l.color||'#666666',route_type:l.mode==='tram'?0:l.mode==='trolleybus'?11:3};});
+      });
       return jr({routes:routes});
     }
     if(path.includes('/gtfs/departures')){
@@ -130,5 +147,5 @@
     return jr({},404);
     };
 
-    console.info('[MHD] Offline mode — flat 3D + models + API intercepted, era from GitHub');
+    console.info('[MHD] Offline mode — flat 3D + /models/ + API intercepted, era from GitHub');
     })();
