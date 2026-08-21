@@ -1,0 +1,1479 @@
+<!DOCTYPE html>
+
+<html lang="cs">
+
+<head>
+
+<meta charset="UTF-8" />
+
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+<title>MHD Opava 3D – Digital Twin</title>
+
+
+<!-- Mapbox GL JS -->
+
+<link href="https://api.mapbox.com/mapbox-gl-js/v3.28.1/mapbox-gl.css" rel="stylesheet" />
+
+<script src="https://api.mapbox.com/mapbox-gl-js/v3.28.1/mapbox-gl.js"></script>
+
+<!-- Turf.js -->
+
+<script src="https://unpkg.com/@turf/turf@6/turf.min.js"></script>
+
+<!-- Three.js + GLTFLoader -->
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
+
+
+<style>
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body { font-family: ui-sans-serif, system-ui, sans-serif; overflow: hidden; background: #0c0a09; }
+
+
+#map { position: fixed; inset: 0; }
+
+
+/* Loading */
+
+#loader {
+
+position: fixed; inset: 0; display: flex; align-items: center; justify-content: center;
+
+background: linear-gradient(135deg, #1c1917, #292524); z-index: 100;
+
+}
+
+#loader .spinner {
+
+width: 48px; height: 48px; border: 4px solid rgba(251, 191, 36, 0.3);
+
+border-top-color: #fbbf24; border-radius: 50%; animation: spin 0.8s linear infinite; margin: 0 auto 16px;
+
+}
+
+#loader p { color: #fef3c7; font-size: 14px; text-align: center; }
+
+@keyframes spin { to { transform: rotate(360deg); } }
+
+
+/* Header */
+
+header {
+
+position: fixed; top: 0; left: 0; right: 0; z-index: 10;
+
+display: flex; align-items: center; justify-content: space-between;
+
+padding: 12px 16px;
+
+background: linear-gradient(to bottom, rgba(0,0,0,0.7), transparent);
+
+}
+
+.brand { display: flex; align-items: center; gap: 12px; }
+
+.brand-icon {
+
+width: 36px; height: 36px; border-radius: 12px;
+
+background: linear-gradient(135deg, #f59e0b, #ea580c);
+
+display: flex; align-items: center; justify-content: center;
+
+color: #fff; font-weight: 700; box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+
+}
+
+.brand-icon svg { width: 20px; height: 20px; fill: currentColor; }
+
+.brand h1 { color: #fff; font-size: 14px; font-weight: 700; }
+
+.brand p { color: rgba(255,255,255,0.5); font-size: 10px; text-transform: uppercase; letter-spacing: 0.05em; }
+
+
+.header-controls { display: flex; align-items: center; gap: 8px; }
+
+.btn-header {
+
+padding: 8px 16px; border-radius: 12px;
+
+background: rgba(255,255,255,0.1); backdrop-filter: blur(12px);
+
+color: #fff; font-size: 12px; font-weight: 600;
+
+border: 1px solid rgba(255,255,255,0.2); cursor: pointer;
+
+transition: background 0.15s;
+
+}
+
+.btn-header:hover { background: rgba(255,255,255,0.2); }
+
+.btn-header.active {
+
+background: rgba(245, 158, 11, 0.9); border-color: #fbbf24;
+
+}
+
+.header-info { color: rgba(255,255,255,0.4); font-size: 10px; }
+
+@media (max-width: 640px) { .header-info { display: none; } }
+
+
+/* Ride panel */
+
+.panel {
+
+position: fixed; bottom: 24px; left: 24px; z-index: 10;
+
+background: rgba(28, 25, 23, 0.8); backdrop-filter: blur(20px);
+
+border-radius: 16px; border: 1px solid rgba(255,255,255,0.1);
+
+box-shadow: 0 20px 50px rgba(0,0,0,0.4);
+
+padding: 20px; width: 288px;
+
+}
+
+.panel-title { color: #fff; font-size: 14px; font-weight: 700; margin-bottom: 4px; }
+
+.panel-desc { color: rgba(255,255,255,0.4); font-size: 12px; margin-bottom: 16px; }
+
+
+.field { margin-bottom: 12px; }
+
+.field-label {
+
+display: block; color: rgba(255,255,255,0.5); font-size: 10px;
+
+font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 4px;
+
+}
+
+.field-label-row { display: flex; justify-content: space-between; align-items: center; }
+
+.field-label-row .value { color: #fbbf24; }
+
+
+.select, .range {
+
+width: 100%; background: #292524; color: #fff; font-size: 12px;
+
+border-radius: 8px; border: 1px solid rgba(255,255,255,0.1);
+
+padding: 8px 12px; outline: none;
+
+}
+
+.select:focus { border-color: #fbbf24; }
+
+.range { padding: 0; accent-color: #f59e0b; height: 28px; }
+
+
+.btn-start {
+
+width: 100%; padding: 12px; border-radius: 12px; border: none;
+
+background: linear-gradient(to right, #f59e0b, #ea580c);
+
+color: #fff; font-weight: 700; font-size: 14px; cursor: pointer;
+
+display: flex; align-items: center; justify-content: center; gap: 8px;
+
+box-shadow: 0 8px 20px rgba(120, 53, 15, 0.3);
+
+transition: all 0.15s;
+
+}
+
+.btn-start:hover { background: linear-gradient(to right, #fbbf24, #f97316); }
+
+.btn-start svg { width: 16px; height: 16px; fill: currentColor; }
+
+
+/* Active ride panel */
+
+.ride-panel {
+
+position: fixed; top: 80px; left: 24px; z-index: 10;
+
+background: rgba(28, 25, 23, 0.8); backdrop-filter: blur(20px);
+
+border-radius: 16px; border: 1px solid rgba(245, 158, 11, 0.3);
+
+box-shadow: 0 20px 50px rgba(0,0,0,0.4);
+
+padding: 16px; width: 256px;
+
+}
+
+.ride-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+
+.ride-label { color: #fbbf24; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; }
+
+.ride-name { color: #fff; font-size: 14px; font-weight: 700; }
+
+.pulse-dot { width: 8px; height: 8px; border-radius: 50%; background: #4ade80; animation: pulse 1.5s ease-in-out infinite; }
+
+@keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.4; } }
+
+
+.ride-speed { display: flex; align-items: center; gap: 8px; color: rgba(255,255,255,0.6); font-size: 12px; margin-bottom: 12px; }
+
+.ride-speed .num { color: #fbbf24; font-weight: 700; font-size: 18px; }
+
+
+.ride-controls { display: flex; gap: 8px; }
+
+.btn-ride {
+
+flex: 1; padding: 8px; border-radius: 8px; border: none;
+
+background: rgba(255,255,255,0.1); color: #fff; font-size: 12px; font-weight: 600;
+
+cursor: pointer; transition: background 0.15s;
+
+}
+
+.btn-ride:hover { background: rgba(255,255,255,0.2); }
+
+.btn-restart { width: 100%; margin-top: 8px; display: flex; align-items: center; justify-content: center; gap: 8px; }
+
+.btn-restart svg { width: 12px; height: 12px; fill: currentColor; }
+
+
+.btn-stop {
+
+position: fixed; bottom: 24px; left: 24px; z-index: 10;
+
+padding: 12px 24px; border-radius: 12px; border: none;
+
+background: #dc2626; color: #fff; font-weight: 700; font-size: 14px; cursor: pointer;
+
+box-shadow: 0 8px 20px rgba(0,0,0,0.3);
+
+display: flex; align-items: center; gap: 8px;
+
+transition: background 0.15s;
+
+}
+
+.btn-stop:hover { background: #ef4444; }
+
+.btn-stop svg { width: 16px; height: 16px; fill: currentColor; }
+
+
+/* Info hint */
+
+.info-hint {
+
+position: fixed; bottom: 24px; right: 24px; z-index: 10;
+
+color: rgba(255,255,255,0.3); font-size: 10px; text-align: right;
+
+max-width: 192px; line-height: 1.5;
+
+}
+
+
+/* Error */
+
+#error-screen {
+
+position: fixed; inset: 0; display: none; align-items: center; justify-content: center;
+
+background: #0c0a09; color: #fff; padding: 32px; z-index: 100;
+
+}
+
+#error-screen .err-title { color: #f87171; font-weight: 600; margin-bottom: 8px; }
+
+#error-screen .err-msg { font-size: 14px; color: #d6d3d1; }
+
+</style>
+
+</head>
+
+<body>
+
+<div id="map"></div>
+
+
+<!-- Loading -->
+
+<div id="loader">
+
+<div style="text-align: center;">
+
+<div class="spinner"></div>
+
+<p>Načítání 3D mapy a vozidel…</p>
+
+</div>
+
+</div>
+
+
+<!-- Error -->
+
+<div id="error-screen">
+
+<div style="text-align: center; max-width: 400px;">
+
+<p class="err-title">Chyba</p>
+
+<p class="err-msg" id="error-msg"></p>
+
+</div>
+
+</div>
+
+
+<!-- Header -->
+
+<header id="header" style="display: none;">
+
+<div class="brand">
+
+<div class="brand-icon">
+
+<svg viewBox="0 0 24 24"><path d="M4 16c0 .88.39 1.67 1 2.22V20c0 .55.45 1 1 1h1c.55 0 1-.45 1-1v-1h8v1c0 .55.45 1 1 1h1c.55 0 1-.45 1-1v-1.78c.61-.55 1-1.34 1-2.22V6c0-3.5-3.58-4-8-4s-8 .5-8 4v10zm3.5 1c-.83 0-1.5-.67-1.5-1.5S6.67 14 7.5 14s1.5.67 1.5 1.5S8.33 17 7.5 17zm9 0c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5zm1.5-6H6V6h12v5z" /></svg>
+
+</div>
+
+<div>
+
+<h1>MHD Opava 3D</h1>
+
+<p>Digital Twin &amp; Simulace</p>
+
+</div>
+
+</div>
+
+<div class="header-controls">
+
+<button class="btn-header" id="btn-3d">◆ 3D pohled</button>
+
+<button class="btn-header active" id="btn-vehicles">🚌 Vozidla ON</button>
+
+<span class="header-info" id="route-info"></span>
+
+</div>
+
+</header>
+
+
+<!-- Ride setup panel -->
+
+<div class="panel" id="ride-setup" style="display: none;">
+
+<div class="panel-title">Jízda vozidlem</div>
+
+<p class="panel-desc">Vyberte vozidlo a trasu, kamera se napojí za autobus.</p>
+
+
+<div class="field">
+
+<label class="field-label">Typ vozidla</label>
+
+<select class="select" id="sel-vehicle"></select>
+
+</div>
+
+
+<div class="field">
+
+<label class="field-label">Trasa</label>
+
+<select class="select" id="sel-route">
+
+<option value="">Náhodná trasa</option>
+
+</select>
+
+</div>
+
+
+<div class="field">
+
+<label class="field-label field-label-row">
+
+<span>Rychlost</span>
+
+<span class="value" id="speed-display">30 km/h</span>
+
+</label>
+
+<input type="range" class="range" id="speed-range" min="5" max="80" value="30" />
+
+</div>
+
+
+<button class="btn-start" id="btn-start">
+
+<svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z" /></svg>
+
+Start jízdy
+
+</button>
+
+</div>
+
+
+<!-- Active ride panel -->
+
+<div class="ride-panel" id="ride-active" style="display: none;">
+
+<div class="ride-header">
+
+<div>
+
+<div class="ride-label">Sleduji vozidlo</div>
+
+<div class="ride-name" id="ride-vehicle-name">Vozidlo</div>
+
+</div>
+
+<div class="pulse-dot"></div>
+
+</div>
+
+<div class="ride-speed">
+
+<span class="num" id="ride-speed-num">30</span>
+
+<span>km/h</span>
+
+</div>
+
+<div class="ride-controls">
+
+<button class="btn-ride" id="btn-slower">− Pomaleji</button>
+
+<button class="btn-ride" id="btn-faster">+ Rychleji</button>
+
+</div>
+
+<button class="btn-ride btn-restart" id="btn-restart">
+
+<svg viewBox="0 0 24 24"><path d="M12 5V1L7 6l5 5V7c3.31 0 6 2.69 6 6s-2.69 6-6 6-6-2.69-6-6H4c0 4.42 3.58 8 8 8s8-3.58 8-8-3.58-8-8-8z" /></svg>
+
+Restart
+
+</button>
+
+</div>
+
+
+<button class="btn-stop" id="btn-stop" style="display: none;">
+
+<svg viewBox="0 0 24 24"><path d="M6 6h12v12H6z" /></svg>
+
+Ukončit jízdu
+
+</button>
+
+
+<div class="info-hint" id="info-hint" style="display: none;">
+
+3D modely autobusů jsouzdí po trasách MHD Opava.<br />
+
+Použijte „Jízda vozidlem" pro sledování z paluby.
+
+</div>
+
+
+<script>
+
+// ===== Configuration =====
+
+const MAPBOX_TOKEN = 'pk.eyJ1IjoicHJlcmVraHUiLCJhIjoiY210MTdrdGdkMGF4NTJ5cXRmajZuYnZ4diJ9.cYutpkeP6s0XVyubG68_6Q';
+
+const MAPTRAS_URL = 'https://media.base44.com/files/public/user_6a6de6204690e6d3b939a064/032257e9b_maptras1.html';
+
+const VEHICLE_MODELS = {
+    Irisbus: 'https://github.com/prerekhu-cloud/Mhd/raw/refs/heads/main/Irisbus.glb',
+    '26TR': 'https://github.com/prerekhu-cloud/Mhd/raw/refs/heads/main/26tr.glb',
+    Sorelektro: 'https://github.com/prerekhu-cloud/Mhd/raw/refs/heads/main/Sorelektro.glb',
+    Iveco12m: 'https://github.com/prerekhu-cloud/Mhd/raw/refs/heads/main/Iveco12m.glb',
+    Sorbus: 'https://github.com/prerekhu-cloud/Mhd/raw/refs/heads/main/Sorbus.glb',
+    '32TR': 'https://github.com/prerekhu-cloud/Mhd/raw/refs/heads/main/32tropava.glb',
+    Iveco10m: 'https://github.com/prerekhu-cloud/Mhd/raw/refs/heads/main/Iveco10m.glb',
+};
+
+
+
+
+// ===== State =====
+
+let map = null;
+
+let vehicleLayer = null;
+
+let routes = [];
+
+let animationId = null;
+
+let is3D = true;
+
+let showVehicles = true;
+
+let riding = false;
+
+let rideState = { active: false, vehicle: null, speed: 30 };
+
+let selectedRoute = null;
+
+let selectedVehicle = 'Irisbus';
+
+let speed = 30;
+
+
+// ===== Helpers =====
+
+function $(id) { return document.getElementById(id); }
+
+
+function showError(msg) {
+
+$('loader').style.display = 'none';
+
+$('error-msg').textContent = msg;
+
+$('error-screen').style.display = 'flex';
+
+}
+
+
+function hideLoader() {
+
+$('loader').style.display = 'none';
+
+$('header').style.display = 'flex';
+
+$('ride-setup').style.display = 'block';
+
+$('info-hint').style.display = 'block';
+
+}
+
+
+// ===== Route loading =====
+
+async function loadOpavaRoutes() {
+
+const response = await fetch(MAPTRAS_URL);
+
+const html = await response.text();
+
+
+const scriptMatches = html.match(/<script[^>]*>([\s\S]*?)<\/script>/gi) || [];
+
+const allScript = scriptMatches.map(s => s.replace(/<\/?script[^>]*>/gi, '')).join('\n');
+
+
+const result = [];
+
+for (let i = 1; i <= 40; i++) {
+
+const declStr = `const coordinatesTrasa${i} = `;
+
+const startIdx = allScript.indexOf(declStr);
+
+if (startIdx === -1) continue;
+
+
+const arrayStart = allScript.indexOf('[', startIdx);
+
+if (arrayStart === -1) continue;
+
+
+let depth = 0;
+
+let end = arrayStart;
+
+for (let j = arrayStart; j < allScript.length; j++) {
+
+if (allScript[j] === '[') depth++;
+
+if (allScript[j] === ']') {
+
+depth--;
+
+if (depth === 0) { end = j + 1; break; }
+
+}
+
+}
+
+const arrayStr = allScript.substring(arrayStart, end);
+
+try {
+
+const coords = JSON.parse(arrayStr);
+
+if (Array.isArray(coords) && coords.length > 1) {
+
+result.push({ id: i, name: `Trasa ${i}`, coordinates: coords });
+
+}
+
+} catch (e) { /* skip */ }
+
+}
+
+return result;
+
+}
+
+
+// ===== VehicleLayer3D (Three.js custom Mapbox layer) =====
+
+class VehicleLayer3D {
+
+constructor(id) {
+
+this.id = id;
+
+this.type = 'custom';
+
+this.renderingMode = '3d';
+
+this.vehicles = [];
+
+this.modelCache = new Map();
+
+}
+
+
+onAdd(map, gl) {
+
+this.map = map;
+
+this.gl = gl;
+
+
+const THREE = window.THREE;
+
+if (!THREE) return;
+
+
+this.camera = new THREE.PerspectiveCamera(60, 1, 0.1, 1e15);
+
+this.scene = new THREE.Scene();
+
+
+const ambient = new THREE.AmbientLight(0xffffff, 0.75);
+
+const directional = new THREE.DirectionalLight(0xffffff, 0.5);
+
+directional.position.set(0.5, -0.5, 1);
+
+this.scene.add(ambient, directional);
+
+
+this.renderer = new THREE.WebGLRenderer({
+
+canvas: map.getCanvas(),
+
+context: gl,
+
+antialias: true,
+
+});
+
+this.renderer.autoClear = false;
+
+
+this.vehicles.forEach(v => this._loadModel(v));
+
+}
+
+
+_loadModel(vehicle) {
+
+const THREE = window.THREE;
+
+if (!THREE || !THREE.GLTFLoader) {
+
+setTimeout(() => this._loadModel(vehicle), 200);
+
+return;
+
+}
+
+if (this.modelCache.has(vehicle.modelUrl)) {
+
+const model = this.modelCache.get(vehicle.modelUrl).clone();
+
+vehicle.mesh = model;
+
+this.scene.add(model);
+
+vehicle.loaded = true;
+
+return;
+
+}
+
+const loader = new THREE.GLTFLoader();
+
+loader.load(
+
+vehicle.modelUrl,
+
+(gltf) => {
+
+const model = gltf.scene;
+
+this.modelCache.set(vehicle.modelUrl, model);
+
+const clone = model.clone();
+
+vehicle.mesh = clone;
+
+this.scene.add(clone);
+
+vehicle.loaded = true;
+
+},
+
+undefined,
+
+(err) => console.error('Model load failed:', vehicle.modelUrl, err)
+
+);
+
+}
+
+
+addVehicle({ modelUrl, routeCoords, speed = 20, scale = 1, name = 'Vehicle' }) {
+
+const vehicle = {
+
+modelUrl, routeCoords,
+
+distance: Math.random() * this._routeLength(routeCoords),
+
+speed, scale, name,
+
+mesh: null, loaded: false,
+
+currentLng: routeCoords[0][0],
+
+currentLat: routeCoords[0][1],
+
+currentBearing: 0,
+
+};
+
+this.vehicles.push(vehicle);
+
+if (this.scene) this._loadModel(vehicle);
+
+return vehicle;
+
+}
+
+
+_routeLength(coords) {
+
+const turf = window.turf;
+
+if (!turf) return coords.length * 50;
+
+try {
+
+const line = turf.lineString(coords.map(c => [c[0], c[1]]));
+
+return turf.length(line, { units: 'meters' });
+
+} catch { return coords.length * 50; }
+
+}
+
+
+_getPositionAlongRoute(coords, distanceMeters) {
+
+const turf = window.turf;
+
+if (!turf) return null;
+
+try {
+
+const line = turf.lineString(coords.map(c => [c[0], c[1]]));
+
+const totalLen = turf.length(line, { units: 'meters' });
+
+let dist = distanceMeters % totalLen;
+
+if (dist < 0) dist += totalLen;
+
+const pt = turf.along(line, dist, { units: 'meters' });
+
+const next = turf.along(line, (dist + 8) % totalLen, { units: 'meters' });
+
+const bearing = turf.bearing(pt, next);
+
+const frac = dist / totalLen;
+
+const idx = Math.floor(frac * (coords.length - 1));
+
+const alt = coords[idx] ? coords[idx][2] || 260 : 260;
+
+return { lng: pt.geometry.coordinates[0], lat: pt.geometry.coordinates[1], bearing, alt };
+
+} catch { return null; }
+
+}
+
+
+update(deltaTime) {
+
+const THREE = window.THREE;
+
+if (!THREE || !this.map) return;
+
+
+for (const v of this.vehicles) {
+
+if (!v.loaded || !v.mesh) continue;
+
+
+v.distance += v.speed * deltaTime;
+
+const pos = this._getPositionAlongRoute(v.routeCoords, v.distance);
+
+if (!pos) continue;
+
+
+v.currentLng = pos.lng;
+
+v.currentLat = pos.lat;
+
+v.currentBearing = pos.bearing;
+
+
+const mc = window.mapboxgl.MercatorCoordinate.fromLngLat([pos.lng, pos.lat], pos.alt + 1.5);
+
+v.mesh.position.set(mc.x, mc.y, mc.z);
+
+
+const s = v.scale * mc.meterInMercatorUnits;
+
+v.mesh.scale.set(s, s, s);
+
+
+v.mesh.rotation.set(Math.PI / 2, 0, (-pos.bearing * Math.PI) / 180);
+
+}
+
+
+this.map.triggerRepaint();
+
+}
+
+
+render(gl, matrix) {
+
+const THREE = window.THREE;
+
+if (!THREE || !this.renderer || !this.vehicles.some(v => v.loaded)) return;
+
+
+const m = new THREE.Matrix4().fromArray(matrix);
+
+const l = new THREE.Matrix4().makeScale(1, -1, 1);
+
+this.camera.projectionMatrix = new THREE.Matrix4().multiplyMatrices(m, l);
+
+this.camera.projectionMatrixInverse.copy(this.camera.projectionMatrix).invert();
+
+
+this.renderer.resetState();
+
+this.renderer.render(this.scene, this.camera);
+
+}
+
+
+remove() {
+
+if (this.renderer) this.renderer.dispose();
+
+this.vehicles.forEach(v => {
+
+if (v.mesh && this.scene) this.scene.remove(v.mesh);
+
+});
+
+}
+
+}
+
+
+// ===== Init =====
+
+function initMap() {
+
+if (!window.mapboxgl) {
+
+showError('Mapbox GL JS se nenačetl. Zkuste obnovit stránku.');
+
+return;
+
+}
+
+
+window.mapboxgl.accessToken = MAPBOX_TOKEN;
+
+
+map = new window.mapboxgl.Map({
+
+container: 'map',
+
+style: 'mapbox://styles/mapbox/standard',
+
+center: [17.9025, 49.9387],
+
+zoom: 16,
+
+pitch: 60,
+
+bearing: 0,
+
+antialias: true,
+
+});
+
+
+map.on('style.load', () => {
+
+try {
+
+if (!map.getSource('mapbox-dem')) {
+
+map.addSource('mapbox-dem', {
+
+type: 'raster-dem',
+
+url: 'mapbox://mapbox.mapbox-terrain-dem-v1',
+
+tileSize: 512,
+
+maxzoom: 14,
+
+});
+
+map.setTerrain({ source: 'mapbox-dem', exaggeration: 1.5 });
+
+}
+
+} catch (e) { /* terrain already present */ }
+
+
+try {
+
+const layers = map.getStyle().layers;
+
+const labelLayerId = layers.find(
+
+l => l.type === 'symbol' && l.layout && l.layout['text-field']
+
+)?.id;
+
+
+if (labelLayerId && !map.getLayer('add-3d-buildings')) {
+
+if (map.getStyle().sources['composite']) {
+
+map.addLayer({
+
+id: 'add-3d-buildings',
+
+source: 'composite',
+
+'source-layer': 'building',
+
+filter: ['==', 'extrude', 'true'],
+
+type: 'fill-extrusion',
+
+minzoom: 13,
+
+paint: {
+
+'fill-extrusion-color': '#aaa',
+
+'fill-extrusion-opacity': 0.9,
+
+'fill-extrusion-height': ['get', 'height'],
+
+'fill-extrusion-base': ['get', 'min_height'],
+
+},
+
+}, labelLayerId);
+
+}
+
+}
+
+} catch (e) { /* buildings already 3D */ }
+
+});
+
+
+map.on('load', async () => {
+
+try {
+
+routes = await loadOpavaRoutes();
+
+
+// Populate route dropdown
+
+const selRoute = $('sel-route');
+
+routes.forEach(r => {
+
+const opt = document.createElement('option');
+
+opt.value = r.id;
+
+opt.textContent = r.name;
+
+selRoute.appendChild(opt);
+
+});
+
+
+// Populate vehicle dropdown
+
+const selVehicle = $('sel-vehicle');
+
+Object.keys(VEHICLE_MODELS).forEach(v => {
+
+const opt = document.createElement('option');
+
+opt.value = v;
+
+opt.textContent = v;
+
+selVehicle.appendChild(opt);
+
+});
+
+
+$('route-info').textContent = `${routes.length} tras · ${Object.keys(VEHICLE_MODELS).length} typů vozidel`;
+
+
+// Add routes to map
+
+const features = routes.map(r => ({
+
+type: 'Feature',
+
+properties: { id: r.id, name: r.name },
+
+geometry: { type: 'LineString', coordinates: r.coordinates },
+
+}));
+
+
+if (!map.getSource('all-routes')) {
+
+map.addSource('all-routes', {
+
+type: 'geojson',
+
+data: { type: 'FeatureCollection', features },
+
+});
+
+
+map.addLayer({
+
+id: 'routes-layer',
+
+type: 'line',
+
+source: 'all-routes',
+
+slot: 'middle',
+
+layout: { 'line-join': 'round', 'line-cap': 'round' },
+
+paint: {
+
+'line-color': '#E2725B',
+
+'line-width': 4,
+
+'line-opacity': 0.8,
+
+},
+
+});
+
+}
+
+
+// Add vehicle layer
+
+vehicleLayer = new VehicleLayer3D('vehicle-models');
+
+map.addLayer(vehicleLayer);
+
+
+// Add vehicles
+
+const modelKeys = Object.keys(VEHICLE_MODELS);
+
+routes.forEach((route, idx) => {
+
+if (idx >= 12) return;
+
+const modelKey = modelKeys[idx % modelKeys.length];
+
+vehicleLayer.addVehicle({
+
+modelUrl: VEHICLE_MODELS[modelKey],
+
+routeCoords: route.coordinates,
+
+speed: 15 + Math.random() * 15,
+
+scale: 1.5,
+
+name: `${modelKey} – ${route.name}`,
+
+});
+
+});
+
+
+// Animation loop
+
+let lastTime = performance.now();
+
+const animate = (time) => {
+
+const delta = (time - lastTime) / 1000;
+
+lastTime = time;
+
+
+if (vehicleLayer) {
+
+vehicleLayer.update(delta);
+
+
+if (rideState.active && rideState.vehicle) {
+
+const v = rideState.vehicle;
+
+if (v.loaded && v.mesh) {
+
+const bearing = v.currentBearing;
+
+const offsetDist = 0.0003;
+
+const angleRad = (bearing * Math.PI) / 180;
+
+const offsetLng = -Math.sin(angleRad) * offsetDist;
+
+const offsetLat = -Math.cos(angleRad) * offsetDist;
+
+
+map.jumpTo({
+
+center: [v.currentLng + offsetLng, v.currentLat + offsetLat],
+
+zoom: 18,
+
+pitch: 70,
+
+bearing: bearing,
+
+});
+
+}
+
+}
+
+}
+
+
+animationId = requestAnimationFrame(animate);
+
+};
+
+animationId = requestAnimationFrame(animate);
+
+
+hideLoader();
+
+} catch (err) {
+
+console.error(err);
+
+showError('Nepodařilo se načíst data tras: ' + err.message);
+
+}
+
+});
+
+}
+
+
+// ===== Controls =====
+
+function toggle3D() {
+
+if (!map) return;
+
+if (is3D) {
+
+map.easeTo({ pitch: 0, zoom: 14 });
+
+$('btn-3d').textContent = '◆ 3D pohled';
+
+} else {
+
+map.easeTo({ pitch: 60, zoom: 16 });
+
+$('btn-3d').textContent = '◘ 2D pohled';
+
+}
+
+is3D = !is3D;
+
+}
+
+
+function toggleVehicles() {
+
+if (!vehicleLayer) return;
+
+if (showVehicles) {
+
+vehicleLayer.vehicles.forEach(v => {
+
+if (v.mesh) vehicleLayer.scene.remove(v.mesh);
+
+});
+
+$('btn-vehicles').textContent = '🚌 Vozidla OFF';
+
+$('btn-vehicles').classList.remove('active');
+
+} else {
+
+vehicleLayer.vehicles.forEach(v => {
+
+if (v.mesh) vehicleLayer.scene.add(v.mesh);
+
+});
+
+$('btn-vehicles').textContent = '🚌 Vozidla ON';
+
+$('btn-vehicles').classList.add('active');
+
+}
+
+showVehicles = !showVehicles;
+
+}
+
+
+function startRide() {
+
+if (!vehicleLayer || vehicleLayer.vehicles.length === 0) return;
+
+
+let vehicle;
+
+if (selectedRoute != null) {
+
+const route = routes.find(r => r.id === selectedRoute);
+
+if (route) {
+
+vehicle = vehicleLayer.vehicles.find(v => v.routeCoords === route.coordinates);
+
+if (!vehicle) {
+
+vehicle = vehicleLayer.addVehicle({
+
+modelUrl: VEHICLE_MODELS[selectedVehicle] || VEHICLE_MODELS.Irisbus,
+
+routeCoords: route.coordinates,
+
+speed,
+
+scale: 1.5,
+
+name: `${selectedVehicle} – ${route.name}`,
+
+});
+
+}
+
+}
+
+}
+
+if (!vehicle) {
+
+vehicle = vehicleLayer.vehicles[Math.floor(Math.random() * vehicleLayer.vehicles.length)];
+
+}
+
+if (!vehicle) return;
+
+
+if (VEHICLE_MODELS[selectedVehicle] && vehicle.modelUrl !== VEHICLE_MODELS[selectedVehicle]) {
+
+vehicle.modelUrl = VEHICLE_MODELS[selectedVehicle];
+
+vehicle.loaded = false;
+
+if (vehicle.mesh) {
+
+vehicleLayer.scene.remove(vehicle.mesh);
+
+vehicle.mesh = null;
+
+}
+
+vehicleLayer._loadModel(vehicle);
+
+}
+
+
+vehicle.speed = speed;
+
+rideState = { active: true, vehicle, speed };
+
+riding = true;
+
+
+$('ride-setup').style.display = 'none';
+
+$('info-hint').style.display = 'none';
+
+$('ride-active').style.display = 'block';
+
+$('btn-stop').style.display = 'flex';
+
+$('ride-vehicle-name').textContent = vehicle.name || 'Vozidlo';
+
+$('ride-speed-num').textContent = speed;
+
+}
+
+
+function stopRide() {
+
+rideState.active = false;
+
+riding = false;
+
+$('ride-active').style.display = 'none';
+
+$('btn-stop').style.display = 'none';
+
+$('ride-setup').style.display = 'block';
+
+$('info-hint').style.display = 'block';
+
+if (map) map.easeTo({ pitch: 60, zoom: 16 });
+
+}
+
+
+function restartRide() {
+
+if (rideState.vehicle) {
+
+rideState.vehicle.distance = 0;
+
+}
+
+}
+
+
+function changeSpeed(delta) {
+
+speed = Math.max(5, Math.min(100, speed + delta));
+
+$('ride-speed-num').textContent = speed;
+
+$('speed-display').textContent = speed + ' km/h';
+
+$('speed-range').value = speed;
+
+rideState.speed = speed;
+
+if (rideState.vehicle) {
+
+rideState.vehicle.speed = speed;
+
+}
+
+}
+
+
+// ===== Wire up events =====
+
+$('btn-3d').addEventListener('click', toggle3D);
+
+$('btn-vehicles').addEventListener('click', toggleVehicles);
+
+$('btn-start').addEventListener('click', startRide);
+
+$('btn-stop').addEventListener('click', stopRide);
+
+$('btn-restart').addEventListener('click', restartRide);
+
+$('btn-slower').addEventListener('click', () => changeSpeed(-5));
+
+$('btn-faster').addEventListener('click', () => changeSpeed(5));
+
+
+$('sel-vehicle').addEventListener('change', (e) => { selectedVehicle = e.target.value; });
+
+$('sel-route').addEventListener('change', (e) => {
+
+selectedRoute = e.target.value ? parseInt(e.target.value) : null;
+
+});
+
+$('speed-range').addEventListener('input', (e) => {
+
+speed = parseInt(e.target.value);
+
+$('speed-display').textContent = speed + ' km/h';
+
+});
+
+
+// ===== Start =====
+
+initMap();
+
+</script>
+
+</body>
+
+</html>
+
+
