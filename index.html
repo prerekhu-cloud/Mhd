@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>3D Model Viewer</title>
+  <script type="module" src="https://cdn.jsdelivr.net/npm/@google/model-viewer/dist/model-viewer.min.js"></script>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { 
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+      background: #1a1a1a;
+      overflow: hidden;
+    }
+    .container {
+      display: flex;
+      height: 100vh;
+    }
+    .sidebar {
+      width: 280px;
+      background: rgba(0,0,0,0.9);
+      border-right: 1px solid rgba(255,255,255,0.1);
+      overflow-y: auto;
+      padding: 20px;
+      color: white;
+    }
+    .sidebar h2 {
+      margin-bottom: 20px;
+      font-size: 18px;
+      border-bottom: 2px solid #667eea;
+      padding-bottom: 10px;
+    }
+    .model-list {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .model-item {
+      padding: 12px;
+      background: rgba(102, 126, 234, 0.2);
+      border: 1px solid rgba(102, 126, 234, 0.4);
+      border-radius: 6px;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      font-size: 13px;
+      word-break: break-word;
+      text-decoration: none;
+      color: #ddd;
+      display: block;
+    }
+    .model-item:hover {
+      background: rgba(102, 126, 234, 0.4);
+      border-color: #667eea;
+      transform: translateX(5px);
+    }
+    .model-item.active {
+      background: #667eea;
+      border-color: #667eea;
+      color: white;
+      font-weight: bold;
+    }
+    .viewer-area {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      position: relative;
+    }
+    model-viewer {
+      width: 100%;
+      flex: 1;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    }
+    .info {
+      position: absolute;
+      top: 20px;
+      left: 300px;
+      right: 20px;
+      color: white;
+      background: rgba(0,0,0,0.8);
+      padding: 20px;
+      border-radius: 10px;
+      backdrop-filter: blur(10px);
+      border: 1px solid rgba(255,255,255,0.2);
+      z-index: 10;
+    }
+    .info h3 {
+      margin-bottom: 5px;
+      font-size: 16px;
+      color: #667eea;
+    }
+    .info p {
+      font-size: 12px;
+      color: #aaa;
+      margin: 0;
+    }
+    .controls {
+      position: absolute;
+      bottom: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(0,0,0,0.8);
+      padding: 12px 20px;
+      border-radius: 50px;
+      color: white;
+      z-index: 10;
+      backdrop-filter: blur(10px);
+      border: 1px solid rgba(255,255,255,0.2);
+      text-align: center;
+      font-size: 12px;
+    }
+    .loading {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      background: rgba(0,0,0,0.8);
+      padding: 30px;
+      border-radius: 10px;
+      color: white;
+      text-align: center;
+      z-index: 20;
+      display: none;
+    }
+    .loading.show {
+      display: block;
+    }
+    .spinner {
+      border: 3px solid rgba(255,255,255,0.3);
+      border-top: 3px solid #667eea;
+      border-radius: 50%;
+      width: 40px;
+      height: 40px;
+      animation: spin 1s linear infinite;
+      margin: 0 auto 15px;
+    }
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+    .error {
+      color: #ff6b6b;
+      background: rgba(255, 107, 107, 0.1);
+      padding: 10px;
+      border-radius: 5px;
+      margin-top: 10px;
+      border: 1px solid rgba(255, 107, 107, 0.3);
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <!-- Sidebar -->
+    <div class="sidebar">
+      <h2>📁 3D Modely</h2>
+      <div class="model-list" id="modelList">
+        <div style="color: #999; font-size: 12px;">Načítám modely...</div>
+      </div>
+    </div>
+
+    <!-- Viewer -->
+    <div class="viewer-area">
+      <model-viewer 
+        id="viewer"
+        alt="3D Model"
+        auto-rotate
+        camera-controls
+        interaction-prompt="auto"
+        shadow-intensity="1">
+      </model-viewer>
+      
+      <div class="info">
+        <h3 id="modelName">Vyberte model</h3>
+        <p id="modelSize">-</p>
+        <p id="modelPath">-</p>
+      </div>
+
+      <div class="controls">
+        🖱️ Otáčejte myší | 🔍 Přibližujte kolečkem
+      </div>
+
+      <div class="loading" id="loading">
+        <div class="spinner"></div>
+        <p>Model se načítá...</p>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const viewer = document.getElementById('viewer');
+    const modelList = document.getElementById('modelList');
+    const loading = document.getElementById('loading');
+    const modelName = document.getElementById('modelName');
+    const modelSize = document.getElementById('modelSize');
+    const modelPath = document.getElementById('modelPath');
+
+    let models = [];
+
+    // Načti seznam souborů z GitHub API
+    async function loadModels() {
+      try {
+        const response = await fetch('https://api.github.com/repos/prerekhu-cloud/Mhd/contents/');
+        const data = await response.json();
+        
+        // Filtruj GLB soubory
+        models = data
+          .filter(file => file.name.toLowerCase().endsWith('.glb'))
+          .map(file => ({
+            name: file.name,
+            path: file.path,
+            size: (file.size / 1024 / 1024).toFixed(2),
+            url: `https://cdn.jsdelivr.net/gh/prerekhu-cloud/Mhd@main/${file.path}`
+          }));
+
+        renderModelList();
+
+        // Načti první model automaticky
+        if (models.length > 0) {
+          loadModel(0);
+        }
+      } catch (error) {
+        modelList.innerHTML = `<div class="error">Chyba: ${error.message}</div>`;
+        console.error('Chyba při načítání modelů:', error);
+      }
+    }
+
+    function renderModelList() {
+      modelList.innerHTML = models.map((model, index) => `
+        <button 
+          class="model-item ${index === 0 ? 'active' : ''}"
+          onclick="loadModel(${index})"
+          title="${model.name}">
+          🔹 ${model.name}
+        </button>
+      `).join('');
+    }
+
+    function loadModel(index) {
+      const model = models[index];
+      loading.classList.add('show');
+
+      // Aktualizuj active stav
+      document.querySelectorAll('.model-item').forEach((item, i) => {
+        item.classList.toggle('active', i === index);
+      });
+
+      // Nastav nový model
+      viewer.src = model.url;
+
+      // Aktualizuj informace
+      modelName.textContent = `📦 ${model.name}`;
+      modelSize.textContent = `Velikost: ${model.size} MB`;
+      modelPath.textContent = `Cesta: ${model.path}`;
+
+      // Skryj loading po načtení
+      viewer.addEventListener('load', () => {
+        loading.classList.remove('show');
+      }, { once: true });
+
+      console.log(`Model ${index + 1}/${models.length} načten:`, model.url);
+    }
+
+    // Inicializace
+    loadModels();
+  </script>
+</body>
+</html>
