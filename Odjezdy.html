@@ -1,0 +1,613 @@
+<!--
+=====================================================================
+  OPRAVA: špatná URL repozitáře způsobovala HTTP 404
+  Pro MHD_Opava_FINAL.html
+
+  PŘÍČINA: Použil jsem "jizdni-rady-czech-republiky" (s Y na konci),
+  ale skutečný název repozitáře, který používá tvůj vlastní kód
+  (proměnná GTFSBASE), je "jizdni-rady-czech-republic" (BEZ Y).
+  Přesná fungující URL z tvého souboru:
+  https://raw.githubusercontent.com/tangero/jizdni-rady-czech-republic/main/data/mhd/stops.txt
+
+  POSTUP: Smaž předchozí vložený modul (blok od <style id="joystick-odjezdy...)
+  a nahraď ho celým obsahem tohoto souboru, vloženým těsně před </body>.
+=====================================================================
+-->
+
+<style id="joystick-odjezdy-styles">
+  #view-joystick{
+    position:absolute;
+    right:22px;
+    bottom:180px;
+    width:96px;
+    height:96px;
+    z-index:1200;
+    display:none;
+    touch-action:none;
+    user-select:none;
+  }
+  #view-joystick.active{ display:block; }
+  #view-joystick .joy-base{
+    position:absolute;
+    inset:0;
+    border-radius:50%;
+    background:rgba(250,247,243,.9);
+    border:1px solid #e7ded5;
+    box-shadow:0 10px 28px rgba(0,0,0,.18);
+    backdrop-filter:blur(14px);
+  }
+  #view-joystick .joy-base::before{
+    content:"";
+    position:absolute;
+    inset:8px;
+    border-radius:50%;
+    border:1.5px dashed rgba(193,120,79,.35);
+  }
+  #view-joystick .joy-compass{
+    position:absolute;
+    inset:0;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    font-size:9px;
+    font-weight:700;
+    color:#a98b78;
+    pointer-events:none;
+  }
+  #view-joystick .joy-compass span{ position:absolute; }
+  #view-joystick .joy-compass .n{ top:6px; }
+  #view-joystick .joy-compass .s{ bottom:6px; }
+  #view-joystick .joy-compass .e{ right:7px; }
+  #view-joystick .joy-compass .w{ left:7px; }
+  #view-joystick .joy-stick{
+    position:absolute;
+    width:38px;
+    height:38px;
+    left:50%;
+    top:50%;
+    transform:translate(-50%,-50%);
+    border-radius:50%;
+    background:#C1784F;
+    box-shadow:0 4px 14px rgba(193,120,79,.45);
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    color:#fff;
+    font-size:13px;
+    touch-action:none;
+    cursor:grab;
+  }
+  #view-joystick .joy-stick:active{ cursor:grabbing; }
+  #view-joystick .joy-reset{
+    position:absolute;
+    bottom:-30px;
+    left:50%;
+    transform:translateX(-50%);
+    font-size:9px;
+    font-weight:700;
+    color:#8c6957;
+    background:#fff;
+    border:1px solid #e7ded5;
+    border-radius:999px;
+    padding:4px 10px;
+    white-space:nowrap;
+    cursor:pointer;
+  }
+  body.dark #view-joystick .joy-base{ background:rgba(31,30,28,.92); border-color:#3a3734; }
+  body.dark #view-joystick .joy-reset{ background:#22211f; border-color:#3a3734; color:#e4a17c; }
+  body.dark #view-joystick .joy-compass{ color:#b8aea5; }
+
+  @media (max-width:700px){
+    #view-joystick{ right:14px; bottom:150px; width:82px; height:82px; }
+    #view-joystick .joy-stick{ width:32px; height:32px; }
+  }
+
+  #departures-bar{
+    position:absolute;
+    left:12px;
+    right:12px;
+    bottom:12px;
+    z-index:1180;
+    display:none;
+    align-items:stretch;
+    gap:10px;
+    background:rgba(250,247,243,.97);
+    border:1px solid #e7ded5;
+    border-radius:20px;
+    box-shadow:0 16px 45px rgba(0,0,0,.16);
+    backdrop-filter:blur(20px);
+    padding:10px 12px;
+    font-family:'Outfit',sans-serif;
+    overflow:hidden;
+  }
+  #departures-bar.open{ display:flex; }
+
+  #dep-stop-cell{
+    flex:0 0 auto;
+    display:flex;
+    flex-direction:column;
+    justify-content:center;
+    gap:4px;
+    min-width:210px;
+    border-right:1px solid #eee5dc;
+    padding-right:12px;
+  }
+  #dep-stop-cell label{
+    font-size:9px; font-weight:700; letter-spacing:.08em;
+    text-transform:uppercase; color:#a98b78;
+  }
+  #dep-stop-select{
+    border:1.5px solid #e4dbd3;
+    border-radius:10px;
+    background:#fff;
+    font:600 12.5px 'Outfit',sans-serif;
+    color:#3a332d;
+    padding:6px 8px;
+    outline:none;
+    max-width:240px;
+  }
+
+  #dep-clock-cell{
+    flex:0 0 auto;
+    display:flex;
+    flex-direction:column;
+    justify-content:center;
+    align-items:center;
+    gap:2px;
+    min-width:92px;
+    border-right:1px solid #eee5dc;
+    padding-right:12px;
+  }
+  #dep-clock-cell label{
+    font-size:9px; font-weight:700; letter-spacing:.08em;
+    text-transform:uppercase; color:#a98b78;
+  }
+  #dep-clock{
+    font-size:19px;
+    font-weight:700;
+    color:#302b27;
+    font-variant-numeric:tabular-nums;
+    letter-spacing:.02em;
+  }
+
+  #dep-lines-cell{
+    flex:1 1 auto;
+    display:flex;
+    align-items:center;
+    gap:8px;
+    overflow-x:auto;
+    scrollbar-width:thin;
+    padding:2px 2px;
+  }
+  #dep-lines-cell::-webkit-scrollbar{ height:6px; }
+  #dep-lines-cell::-webkit-scrollbar-thumb{ background:#d8c9bc; border-radius:999px; }
+
+  .dep-card{
+    flex:0 0 auto;
+    display:flex;
+    align-items:center;
+    gap:8px;
+    background:#fff;
+    border:1px solid #e8dfd6;
+    border-radius:14px;
+    padding:7px 11px;
+    min-width:118px;
+  }
+  .dep-line-badge{
+    min-width:30px; height:26px; padding:0 7px;
+    border-radius:999px; background:#C1784F; color:#fff;
+    display:flex; align-items:center; justify-content:center;
+    font-size:12px; font-weight:700; flex:0 0 auto;
+  }
+  .dep-info{ display:flex; flex-direction:column; line-height:1.2; }
+  .dep-dest{
+    font-size:10.5px; font-weight:600; color:#3a332d;
+    max-width:110px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+  }
+  .dep-time-row{ display:flex; align-items:baseline; gap:5px; }
+  .dep-time{ font-size:13px; font-weight:700; color:#2F6F4E; font-variant-numeric:tabular-nums; }
+  .dep-delay{ font-size:10.5px; font-weight:700; color:#c0392b; }
+  .dep-ontime{ font-size:9.5px; font-weight:600; color:#8a9b8a; }
+  #dep-status{
+    flex:0 0 auto; display:flex; align-items:center; justify-content:center;
+    font-size:10px; color:#8d8178; min-width:80px; text-align:center; padding:0 6px;
+  }
+  #dep-status.error{ color:#c0392b; }
+
+  body.dark #departures-bar{ background:rgba(25,25,24,.97); border-color:#3a3734; color:#eee; }
+  body.dark #dep-stop-cell, body.dark #dep-clock-cell{ border-color:#3a3734; }
+  body.dark #dep-stop-select{ background:#22211f; border-color:#3a3734; color:#eee; }
+  body.dark #dep-clock{ color:#f1ebe5; }
+  body.dark .dep-card{ background:#22211f; border-color:#3a3734; }
+  body.dark .dep-dest{ color:#e9e2da; }
+  body.dark #dep-status{ color:#aaa; }
+
+  @media (max-width:900px){
+    #departures-bar{ flex-wrap:wrap; bottom:8px; left:8px; right:8px; padding:8px 10px; }
+    #dep-stop-cell, #dep-clock-cell{ border-right:0; padding-right:0; min-width:auto; }
+    #dep-lines-cell{ order:3; flex-basis:100%; margin-top:6px; }
+  }
+</style>
+
+<div id="view-joystick">
+  <div class="joy-base"></div>
+  <div class="joy-compass">
+    <span class="n">S</span><span class="s">J</span><span class="e">V</span><span class="w">Z</span>
+  </div>
+  <div class="joy-stick" id="joy-stick-handle"><i class="fa-solid fa-arrows-up-down-left-right"></i></div>
+  <div class="joy-reset" id="joy-reset-btn">Reset pohledu</div>
+</div>
+
+<div id="departures-bar">
+  <div id="dep-stop-cell">
+    <label for="dep-stop-select">Zastávka</label>
+    <select id="dep-stop-select"><option>Načítám zastávky…</option></select>
+  </div>
+  <div id="dep-clock-cell">
+    <label>Čas</label>
+    <div id="dep-clock">--:--:--</div>
+  </div>
+  <div id="dep-lines-cell">
+    <div id="dep-status">Načítám síť zastávek…</div>
+  </div>
+</div>
+
+<script>
+(function(){
+  "use strict";
+
+  /* =========================================================
+     ČÁST 1 - JOYSTICK PRO NATÁČENÍ 3D POHLEDU (map3d)
+     ========================================================= */
+  var joyEl = document.getElementById("view-joystick");
+  var stickEl = document.getElementById("joy-stick-handle");
+  var resetBtn = document.getElementById("joy-reset-btn");
+  var joyActive = false;
+  var joyCenter = {x:0, y:0};
+  var joyVector = {x:0, y:0};
+  var joyRAF = null;
+  var initialBearing = -18;
+  var initialPitch = 62;
+
+  function getMap3D(){
+    return (typeof window.map3d !== "undefined") ? window.map3d : null;
+  }
+
+  function showJoystickIfMap3DVisible(){
+    var host = document.getElementById("mapbox3d");
+    var map = getMap3D();
+    if (host && !host.classList.contains("hidden") && map){
+      joyEl.classList.add("active");
+    } else {
+      joyEl.classList.remove("active");
+    }
+  }
+
+  function joyPointerDown(e){
+    e.preventDefault();
+    var rect = joyEl.getBoundingClientRect();
+    joyCenter.x = rect.left + rect.width/2;
+    joyCenter.y = rect.top + rect.height/2;
+    joyActive = true;
+    stickEl.setPointerCapture && stickEl.setPointerCapture(e.pointerId);
+    startJoyLoop();
+  }
+
+  function joyPointerMove(e){
+    if (!joyActive) return;
+    var dx = e.clientX - joyCenter.x;
+    var dy = e.clientY - joyCenter.y;
+    var maxR = joyEl.clientWidth/2 - 20;
+    var dist = Math.sqrt(dx*dx + dy*dy);
+    if (dist > maxR){ dx = dx/dist*maxR; dy = dy/dist*maxR; }
+    joyVector.x = dx / maxR;
+    joyVector.y = dy / maxR;
+    stickEl.style.transform = "translate(calc(-50% + " + dx + "px), calc(-50% + " + dy + "px))";
+  }
+
+  function joyPointerUp(){
+    joyActive = false;
+    joyVector.x = 0; joyVector.y = 0;
+    stickEl.style.transform = "translate(-50%,-50%)";
+    stopJoyLoop();
+  }
+
+  function startJoyLoop(){
+    if (joyRAF) return;
+    function loop(){
+      var map = getMap3D();
+      if (map && joyActive && (Math.abs(joyVector.x) > 0.02 || Math.abs(joyVector.y) > 0.02)){
+        var bearingSpeed = 2.6;
+        var pitchSpeed = 1.4;
+        var newBearing = map.getBearing() + joyVector.x * bearingSpeed;
+        var newPitch = map.getPitch() - joyVector.y * pitchSpeed;
+        newPitch = Math.max(0, Math.min(82, newPitch));
+        map.jumpTo({ bearing: newBearing, pitch: newPitch });
+      }
+      joyRAF = requestAnimationFrame(loop);
+    }
+    joyRAF = requestAnimationFrame(loop);
+  }
+
+  function stopJoyLoop(){
+    if (joyRAF){ cancelAnimationFrame(joyRAF); joyRAF = null; }
+  }
+
+  resetBtn.addEventListener("click", function(){
+    var map = getMap3D();
+    if (map) map.easeTo({ bearing: initialBearing, pitch: initialPitch, duration: 500 });
+  });
+
+  stickEl.addEventListener("pointerdown", joyPointerDown);
+  window.addEventListener("pointermove", joyPointerMove);
+  window.addEventListener("pointerup", joyPointerUp);
+  window.addEventListener("pointercancel", joyPointerUp);
+
+  var btn2d = document.getElementById("btn-map-2d");
+  var btn3dToggle = document.getElementById("btn-model-3d");
+  if (btn2d) btn2d.addEventListener("click", function(){ setTimeout(showJoystickIfMap3DVisible, 250); });
+  if (btn3dToggle) btn3dToggle.addEventListener("click", function(){ setTimeout(showJoystickIfMap3DVisible, 400); });
+  setInterval(showJoystickIfMap3DVisible, 1000);
+
+  /* =========================================================
+     ČÁST 2 - PANEL ODJEZDŮ
+     GTFS URL opravena na SKUTEČNOU adresu z tvého kódu (bez "y" na
+     konci "republic").
+     ========================================================= */
+  var depBar = document.getElementById("departures-bar");
+  var depSelect = document.getElementById("dep-stop-select");
+  var depClock = document.getElementById("dep-clock");
+  var depLinesCell = document.getElementById("dep-lines-cell");
+  var depStatus = document.getElementById("dep-status");
+  var depRefreshTimer = null;
+
+  var GTFS_STOPS_URL = "https://raw.githubusercontent.com/tangero/jizdni-rady-czech-republic/main/data/mhd/stops.txt";
+
+  function csvParseLine(line){
+    var out = [];
+    var cur = "";
+    var q = false;
+    for (var i = 0; i < line.length; i++){
+      var ch = line[i];
+      if (ch === '"'){
+        if (q && line[i+1] === '"'){ cur += '"'; i++; }
+        else q = !q;
+      } else if (ch === ',' && !q){
+        out.push(cur); cur = "";
+      } else {
+        cur += ch;
+      }
+    }
+    out.push(cur);
+    return out;
+  }
+
+  function fetchStopsFromGTFS(){
+    return fetch(GTFS_STOPS_URL, {cache:"force-cache"})
+      .then(function(r){
+        if (!r.ok) throw new Error("HTTP " + r.status);
+        return r.text();
+      })
+      .then(function(text){
+        var rows = text.split(/\r?\n/).filter(Boolean);
+        var header = csvParseLine(rows.shift());
+        var idx = {};
+        header.forEach(function(h,i){ idx[h.trim()] = i; });
+
+        var nameIdx = idx["stop_name"];
+        if (nameIdx === undefined) throw new Error("Neočekávaný formát stops.txt (chybí stop_name)");
+
+        var seen = {};
+        var out = [];
+        rows.forEach(function(row){
+          var c = csvParseLine(row);
+          var name = (c[nameIdx] || "").trim();
+          if (!name) return;
+          var key = name.toLowerCase();
+          if (seen[key]) return;
+          seen[key] = true;
+          out.push({ name: name, query: name.indexOf("Opava") === 0 ? name : "Opava," + name });
+        });
+        out.sort(function(a,b){ return a.name.localeCompare(b.name, "cs"); });
+        return out;
+      });
+  }
+
+  function initDeparturesBar(){
+    depBar.classList.add("open");
+    depSelect.disabled = true;
+    startClock();
+
+    fetchStopsFromGTFS().then(function(list){
+      if (!list.length) throw new Error("Prázdný seznam zastávek z GTFS");
+      populateStopSelect(list);
+    }).catch(function(err){
+      console.warn("Nepodařilo se načíst zastávky z GTFS:", err);
+      depStatus.classList.add("error");
+      depStatus.textContent = "Zastávky se nepodařilo načíst: " + err.message;
+      depSelect.innerHTML = '<option value="">— nedostupné —</option>';
+    });
+  }
+
+  function populateStopSelect(list){
+    depSelect.innerHTML = "";
+    list.forEach(function(stop, idx){
+      var opt = document.createElement("option");
+      opt.value = idx;
+      opt.textContent = stop.name;
+      depSelect.appendChild(opt);
+    });
+    depSelect.disabled = false;
+    depSelect.addEventListener("change", function(){
+      loadDepartures(list[depSelect.value]);
+    });
+    loadDepartures(list[0]);
+  }
+
+  function startClock(){
+    function tick(){
+      var d = new Date();
+      depClock.textContent =
+        String(d.getHours()).padStart(2,"0") + ":" +
+        String(d.getMinutes()).padStart(2,"0") + ":" +
+        String(d.getSeconds()).padStart(2,"0");
+    }
+    tick();
+    setInterval(tick, 1000);
+  }
+
+  function buildMpvUrl(query){
+    return "http://www.mpvnet.cz/odis/x/" + encodeURIComponent(query) + "/?t=true&pz=true&pocet=8";
+  }
+
+  function proxyUrls(targetUrl){
+    return [
+      "https://corsproxy.io/?" + encodeURIComponent(targetUrl),
+      "https://api.allorigins.win/raw?url=" + encodeURIComponent(targetUrl)
+    ];
+  }
+
+  function loadDepartures(stop){
+    if (depRefreshTimer) clearInterval(depRefreshTimer);
+    if (!stop || !stop.query){
+      depLinesCell.innerHTML = "";
+      depStatus.classList.add("error");
+      depStatus.textContent = "Chybí název zastávky.";
+      depLinesCell.appendChild(depStatus);
+      return;
+    }
+    fetchDepartures(stop);
+    depRefreshTimer = setInterval(function(){ fetchDepartures(stop); }, 30000);
+  }
+
+  function fetchDepartures(stop){
+    depStatus.classList.remove("error");
+    depStatus.textContent = "Načítám odjezdy…";
+    depLinesCell.innerHTML = "";
+    depLinesCell.appendChild(depStatus);
+
+    var targetUrl = buildMpvUrl(stop.query);
+    var urls = proxyUrls(targetUrl);
+    tryFetchSequential(urls, 0, stop);
+  }
+
+  function tryFetchSequential(urls, idx, stop){
+    if (idx >= urls.length){
+      depStatus.classList.add("error");
+      depStatus.textContent = "Odjezdy pro \"" + stop.name + "\" se nepodařilo načíst z mpvnet.cz.";
+      return;
+    }
+    fetch(urls[idx])
+      .then(function(res){
+        if (!res.ok) throw new Error("HTTP " + res.status);
+        return res.text();
+      })
+      .then(function(xmlText){
+        var parsed = parseMpvXml(xmlText);
+        if (!parsed.length && looksLikeStopListNotDepartures(xmlText)){
+          depStatus.classList.add("error");
+          depStatus.textContent = "Zastávka \"" + stop.name + "\" nenalezena přesně na mpvnet.cz.";
+          return;
+        }
+        renderDepartures(parsed);
+      })
+      .catch(function(){
+        tryFetchSequential(urls, idx+1, stop);
+      });
+  }
+
+  function looksLikeStopListNotDepartures(xmlText){
+    return /<zastavky>|<stops>|<seznam>/i.test(xmlText);
+  }
+
+  function parseMpvXml(xmlText){
+    var out = [];
+    try{
+      var xml = new DOMParser().parseFromString(xmlText, "text/xml");
+      if (xml.querySelector("parsererror")) throw new Error("parse error");
+      var nodes = xml.querySelectorAll("spoj, Spoj, departure, item");
+      nodes.forEach(function(node){
+        var linka = textOf(node, ["linka","Linka","line","cislo_linky"]) ||
+                    node.getAttribute("linka") || node.getAttribute("l") || "?";
+        var cil = textOf(node, ["cil","Cil","smer","destination"]) ||
+                  node.getAttribute("cil") || node.getAttribute("smer") || "";
+        var cas = textOf(node, ["cas","Cas","odjezd","cas_odj","time"]) ||
+                  node.getAttribute("cas") || node.getAttribute("odjezd") || "";
+        var zpozdeniRaw = textOf(node, ["zpozdeni","Zpozdeni","delay"]) ||
+                           node.getAttribute("zpozdeni") || node.getAttribute("delay") || "0";
+        var zpozdeni = parseInt(zpozdeniRaw, 10);
+        if (isNaN(zpozdeni)) zpozdeni = 0;
+        out.push({ linka: String(linka).trim(), cil: String(cil).trim(), cas: String(cas).trim(), zpozdeni: zpozdeni });
+      });
+    }catch(e){
+      console.warn("Chyba parsování XML z mpvnet.cz:", e);
+    }
+    return out;
+  }
+
+  function textOf(node, tagNames){
+    for (var i=0; i<tagNames.length; i++){
+      var el = node.querySelector(tagNames[i]);
+      if (el && el.textContent) return el.textContent;
+    }
+    return null;
+  }
+
+  function renderDepartures(list){
+    depLinesCell.innerHTML = "";
+    if (!list.length){
+      depStatus.textContent = "Žádné odjezdy v nejbližší době.";
+      depLinesCell.appendChild(depStatus);
+      return;
+    }
+    list.forEach(function(dep){
+      var card = document.createElement("div");
+      card.className = "dep-card";
+
+      var badge = document.createElement("div");
+      badge.className = "dep-line-badge";
+      badge.textContent = dep.linka;
+
+      var info = document.createElement("div");
+      info.className = "dep-info";
+
+      var destEl = document.createElement("div");
+      destEl.className = "dep-dest";
+      destEl.textContent = dep.cil || "—";
+
+      var timeRow = document.createElement("div");
+      timeRow.className = "dep-time-row";
+
+      var timeEl = document.createElement("span");
+      timeEl.className = "dep-time";
+      timeEl.textContent = dep.cas || "--:--";
+      timeRow.appendChild(timeEl);
+
+      if (dep.zpozdeni > 0){
+        var delayEl = document.createElement("span");
+        delayEl.className = "dep-delay";
+        delayEl.textContent = "+" + dep.zpozdeni + " min";
+        timeRow.appendChild(delayEl);
+      } else {
+        var okEl = document.createElement("span");
+        okEl.className = "dep-ontime";
+        okEl.textContent = "včas";
+        timeRow.appendChild(okEl);
+      }
+
+      info.appendChild(destEl);
+      info.appendChild(timeRow);
+      card.appendChild(badge);
+      card.appendChild(info);
+      depLinesCell.appendChild(card);
+    });
+  }
+
+  if (document.readyState === "loading"){
+    document.addEventListener("DOMContentLoaded", initDeparturesBar);
+  } else {
+    initDeparturesBar();
+  }
+
+})();
+</script>
