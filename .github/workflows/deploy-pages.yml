@@ -30,12 +30,21 @@ jobs:
         run: |
           set -e
           mkdir -p site
+
           if [ -f opavago-github.zip ]; then
             unzip -o opavago-github.zip -d site
           else
             echo "opavago-github.zip not found in repository root."
             exit 1
           fi
+
+          # Keep vehicle 3D files at the published root so model-viewer can load them
+          for asset in *.glb *.gltf *.bin *.json; do
+            if [ -e "$asset" ]; then
+              cp -f "$asset" site/
+            fi
+          done
+
           touch site/.nojekyll
 
       - name: Setup Pages
