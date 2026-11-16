@@ -38,12 +38,38 @@ jobs:
             exit 1
           fi
 
-          # Keep vehicle 3D files at the published root so model-viewer can load them
-          for asset in *.glb *.gltf *.bin *.json; do
+          # Keep 3D vehicle files and all uploaded asset thumbnails at the site root.
+          for asset in *.glb *.gltf *.bin *.json *.png *.jpg *.jpeg *.webp *.svg; do
             if [ -e "$asset" ]; then
               cp -f "$asset" site/
             fi
           done
+
+          # Also keep the thumbnails in the opavago image directory used by the app.
+          mkdir -p site/opavago/img
+          for asset in \
+            2aae96d2b7.webp \
+            59e17e5123.png \
+            889ed85934.webp \
+            934ed64e97.webp \
+            47984c398f.webp \
+            c09b980991.png \
+            d6d0f29e89.png \
+            f6493be873.webp
+          do
+            if [ -f "$asset" ]; then
+              cp -f "$asset" site/
+              cp -f "$asset" site/opavago/img/
+            fi
+          done
+
+          if [ -d opavago ]; then
+            cp -R opavago site/
+          fi
+
+          if [ -d img ]; then
+            cp -R img site/
+          fi
 
           touch site/.nojekyll
 
